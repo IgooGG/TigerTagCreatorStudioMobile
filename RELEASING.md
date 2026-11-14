@@ -4,7 +4,9 @@
 2. On GitHub, create and publish a release from the intended commit with a tag matching `versionName`, for example `0.0.2` or `v0.0.2`.
 3. The **Build Android release** workflow checks the tag, builds and lints the app, and uploads `TigerTag-Creator-Studio-Android.apk` to that release. Check Actions if it fails; a failed job can be rerun.
 
-The workflow triggers only when a release is published. Commits, pushes, tags on their own, and draft releases do not start a build.
+The automatic workflow triggers only when a release is published. Commits, pushes, tags on their own, and draft releases do not start an automatic build.
+
+To rebuild an existing release with an updated workflow, open **Actions → Build Android release → Run workflow**, select `main`, enter the existing tag (such as `0.0.2`), and start the run. This manual option uses the workflow currently on `main` while building the code at the selected release tag.
 
 The workflow installs Android platform 35 and Build Tools 35.0.0 explicitly. It uses `android-actions/setup-android@v4`, whose defaults no longer request the obsolete `tools` SDK package.
 
