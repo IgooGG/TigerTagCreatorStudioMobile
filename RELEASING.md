@@ -6,6 +6,8 @@
 
 The workflow triggers only when a release is published. Commits, pushes, tags on their own, and draft releases do not start a build.
 
+The workflow installs Android platform 35 and Build Tools 35.0.0 explicitly. It uses `android-actions/setup-android@v4`, whose defaults no longer request the obsolete `tools` SDK package.
+
 ## Signing and updates
 
 The workflow builds a debug APK. With no signing secrets it uses a newly generated debug key on each runner, so users will generally have to uninstall a previously installed build (losing app data) to install another. For installable updates, create and securely back up a dedicated signing keystore and configure all four repository Actions secrets:
