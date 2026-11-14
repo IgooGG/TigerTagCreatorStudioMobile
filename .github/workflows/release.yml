@@ -1,0 +1,63 @@
+name: Build Android release
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 - <<'PY'
+          import os, re, pathlib
+          tag = os.environ['RELEASE_TAG'].removeprefix('v')
+          if not re.fullmatch(r'\d+\.\d+\.\d+', tag):
+              raise SystemExit('Use a version tag such as 0.0.2 or v0.0.2.')
+          source = pathlib.Path('app/build.gradle').read_text()
+          version = re.search(r"versionName\s+'([^']+)'", source)
+          if not version or version.group(1) != tag:
+              raise SystemExit('Release tag must match versionName in app/build.gradle.')
+          PY
+      - name: Configure signing (if secrets are provided)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64$STORE_PASSWORD$KEY_ALIAS$KEY_PASSWORD" ]; then
+            if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+              echo 'All four Android signing secrets are required together.' >&2; exit 1
+            fi
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-signing.jks"
+            echo "SIGNING_STORE_FILE=$RUNNER_TEMP/android-signing.jks" >> "$GITHUB_ENV"
+            echo "SIGNING_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "SIGNING_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo '::warning::No signing secrets configured: this test APK will use a fresh debug key and cannot update other builds.'
+          fi
+      - name: Build and lint
+        run: bash ./gradlew assembleDebug lintDebug --no-daemon
+      - name: Test signature verification
+        run: node tests/signature-test.js app/src/main/assets/editor.html
+      - name: Prepare release asset
+        run: cp app/build/outputs/apk/debug/app-debug.apk TigerTag-Creator-Studio-Android.apk
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" TigerTag-Creator-Studio-Android.apk --clobber
